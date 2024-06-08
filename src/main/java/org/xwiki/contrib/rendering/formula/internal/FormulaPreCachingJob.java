@@ -92,6 +92,12 @@ public class FormulaPreCachingJob extends AbstractJob<FormulaPreCachingJobReques
             logger.info("Macro formula not present on wiki {}, skipping.", request.getWikiId());
             return;
         }
+        XWikiContext xWikiContext = xWikiContextProvider.get();
+        if (xWikiContext == null) {
+            logger.error("Failed to pre-cache document containing the formula macro. The XWikiContext is null.");
+            return;
+        }
+
         // Start by getting a list of every document in the database
         Query query =
             queryManager.createQuery(
@@ -102,27 +108,21 @@ public class FormulaPreCachingJob extends AbstractJob<FormulaPreCachingJobReques
 
         List<Object[]> results = query.execute();
 
-        XWikiContext xWikiContext = xWikiContextProvider.get();
+        XWikiContext xwikiRenderingContext = xWikiContext.clone();
+        xwikiRenderingContext.dropPermissions();
 
-        if (xWikiContext != null) {
-            XWikiContext xwikiRenderingContext = xWikiContext.clone();
-            xwikiRenderingContext.dropPermissions();
+        for (Object[] result : results) {
+            DocumentReference documentReference =
+                documentReferenceResolver.resolve(String.format("%s:%s", request.getWikiId(), result[0]));
 
-            for (Object[] result : results) {
-                DocumentReference documentReference =
-                    documentReferenceResolver.resolve(String.format("%s:%s", request.getWikiId(), result[0]));
+            XWikiDocument document = xWikiContext.getWiki().getDocument(documentReference, xWikiContext);
 
-                XWikiDocument document = xWikiContext.getWiki().getDocument(documentReference, xWikiContext);
-
-                String documentLanguage = (String) result[1];
-                if (StringUtils.isNotBlank(documentLanguage)) {
-                    document = document.getTranslatedDocument(documentLanguage, xWikiContext);
-                }
-                logger.debug("Pre-caching formulas in document [{}], with language [{}]", documentReference, result[1]);
-                preCacheMacrosInDocument(document, formulaMacro);
+            String documentLanguage = (String) result[1];
+            if (StringUtils.isNotBlank(documentLanguage)) {
+                document = document.getTranslatedDocument(documentLanguage, xWikiContext);
             }
-        } else {
-            logger.error("Failed to pre-cache document containing the formula macro. The XWikiContext is null.");
+            logger.debug("Pre-caching formulas in document [{}], with language [{}]", documentReference, result[1]);
+            preCacheMacrosInDocument(document, formulaMacro);
         }
     }
 
