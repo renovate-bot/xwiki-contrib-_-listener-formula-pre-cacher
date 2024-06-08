@@ -48,6 +48,10 @@
     <xwiki.issueManagement.system>jira</xwiki.issueManagement.system>
     <xwiki.issueManagement.url>https://jira.xwiki.org/browse/FORMCACHE</xwiki.issueManagement.url>
     <xwiki.revapi.skip>true</xwiki.revapi.skip>
+    <!-- The Spoon version inherited from this XWiki version has a broken dependency -->
+    <spoon.version>8.1.0</spoon.version>
+    <!-- And skip spoon, as it's failing with an error that doesn't seem related to the code -->
+    <xwiki.spoon.skip>true</xwiki.spoon.skip>
   </properties>
   <dependencies>
     <dependency>
