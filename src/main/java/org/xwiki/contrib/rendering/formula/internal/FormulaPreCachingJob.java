@@ -27,6 +27,9 @@ import javax.inject.Provider;
 
 import org.apache.commons.lang3.StringUtils;
 import org.xwiki.component.annotation.Component;
+import org.xwiki.component.internal.multi.ComponentManagerManager;
+import org.xwiki.component.manager.ComponentLookupException;
+import org.xwiki.component.manager.ComponentManager;
 import org.xwiki.job.AbstractJob;
 import org.xwiki.job.event.status.JobStatus;
 import org.xwiki.model.reference.DocumentReference;
@@ -73,8 +76,7 @@ public class FormulaPreCachingJob extends AbstractJob<FormulaPreCachingJobReques
     private BeanManager beanManager;
 
     @Inject
-    @Named("formula")
-    private Macro<?> formulaMacro;
+    private ComponentManagerManager componentManagerManager;
 
     @Override
     public String getType()
@@ -85,6 +87,11 @@ public class FormulaPreCachingJob extends AbstractJob<FormulaPreCachingJobReques
     @Override
     protected void runInternal() throws Exception
     {
+        Macro formulaMacro = getFormulaMacroForCurrentWiki(request.getWikiId());
+        if (formulaMacro == null) {
+            logger.info("Macro formula not present on wiki {}, skipping.", request.getWikiId());
+            return;
+        }
         // Start by getting a list of every document in the database
         Query query =
             queryManager.createQuery(
@@ -111,33 +118,42 @@ public class FormulaPreCachingJob extends AbstractJob<FormulaPreCachingJobReques
                 if (StringUtils.isNotBlank(documentLanguage)) {
                     document = document.getTranslatedDocument(documentLanguage, xWikiContext);
                 }
-
                 logger.debug("Pre-caching formulas in document [{}], with language [{}]", documentReference, result[1]);
-                preCacheMacrosInDocument(document);
+                preCacheMacrosInDocument(document, formulaMacro);
             }
         } else {
             logger.error("Failed to pre-cache document containing the formula macro. The XWikiContext is null.");
         }
     }
 
-    private void preCacheMacrosInDocument(XWikiDocument document)
+    private Macro getFormulaMacroForCurrentWiki(String wikiId) throws ComponentLookupException
+    {
+        ComponentManager currentWikiCM = this.componentManagerManager.getComponentManager("wiki:" + wikiId, false);
+        if (currentWikiCM != null) {
+            String formulaMacroId = "formula";
+            if (currentWikiCM.hasComponent(Macro.class, formulaMacroId)) {
+                return currentWikiCM.getInstance(Macro.class, formulaMacroId);
+            }
+        }
+        return null;
+    }
+
+    private void preCacheMacrosInDocument(XWikiDocument document, Macro formulaMacro)
     {
         TransformationContext transformationContext = new TransformationContext(document.getXDOM(), Syntax.HTML_5_0,
             true);
         MacroTransformationContext macroTransformationContext = new MacroTransformationContext(transformationContext);
-
-        for (Block block
-            : document.getXDOM().getBlocks(new MacroBlockMatcher("formula"), Block.Axes.DESCENDANT)) {
+        for (Block block : document.getXDOM()
+            .getBlocks(new MacroBlockMatcher(formulaMacro.getDescriptor().getId().getId()), Block.Axes.DESCENDANT)) {
             MacroBlock macroBlock = (MacroBlock) block;
             logger.debug("Pre-caching macro [{}] in document [{}]", macroBlock.getContent(), document);
 
             macroTransformationContext.setCurrentMacroBlock(macroBlock);
 
             try {
-                Object macroParameters = this.formulaMacro.getDescriptor().getParametersBeanClass().newInstance();
+                Object macroParameters = formulaMacro.getDescriptor().getParametersBeanClass().newInstance();
                 this.beanManager.populate(macroParameters, macroBlock.getParameters());
-                ((Macro) this.formulaMacro).execute(macroParameters, macroBlock.getContent(),
-                    macroTransformationContext);
+                ((Macro) formulaMacro).execute(macroParameters, macroBlock.getContent(), macroTransformationContext);
 
             } catch (Throwable e) {
                 logger.error("Failed to pre-cache macro [{}] in document [{}]", macroBlock,
