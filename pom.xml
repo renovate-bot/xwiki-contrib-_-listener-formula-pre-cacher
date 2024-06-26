@@ -45,8 +45,7 @@
   </developers>
   <properties>
     <xwiki.release.jira.skip>false</xwiki.release.jira.skip>
-    <xwiki.issueManagement.system>jira</xwiki.issueManagement.system>
-    <xwiki.issueManagement.url>https://jira.xwiki.org/browse/FORMCACHE</xwiki.issueManagement.url>
+    <xwiki.issueManagement.jira.id>FPLISTEN</xwiki.issueManagement.jira.id>
     <xwiki.revapi.skip>true</xwiki.revapi.skip>
     <!-- The Spoon version inherited from this XWiki version has a broken dependency -->
     <spoon.version>8.1.0</spoon.version>
